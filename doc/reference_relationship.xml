@@ -14,8 +14,8 @@
 		<refnamediv>
 			<refname>ST_3DIntersects</refname>
 
-			<refpurpose>Returns TRUE if the Geometries "spatially
-			intersect" in 3D - only for points, linestrings, polygons, polyhedral surface (area).
+			<refpurpose>Returns true if two geometries spatially
+			intersect in 3D - only for points, linestrings, polygons, polyhedral surface (area).
 			</refpurpose>
 		</refnamediv>
 		<refsynopsisdiv>
@@ -39,13 +39,10 @@
 				returns true, then the geometries also spatially intersect.
 				Disjoint implies false for spatial intersection.</para>
 
+            <note><para>&index_aware;</para></note>
+
 			<para>Changed: 3.0.0 SFCGAL backend removed, GEOS backend supports TINs.</para>
 			<para>Availability: 2.0.0</para>
-			<note>
-			  <para>This function call will automatically include a bounding box
-			  comparison that will make use of any indexes that are available on the
-			  geometries.</para>
-			</note>
 
 			<para>&Z_support;</para>
 			<!-- Optionally mention supports Polyhedral Surface  -->
@@ -81,7 +78,7 @@
 	  <refnamediv>
 		<refname>ST_Contains</refname>
 
-		<refpurpose>Returns true if and only if no points of B lie in the exterior of A, and at least one point of the interior of B lies in the interior of A. </refpurpose>
+		<refpurpose>Returns true if no points of B lie in the exterior of A, and A and B have at least one interior point in common. </refpurpose>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
@@ -101,14 +98,22 @@
 	  <refsection>
 		<title>Description</title>
 
-		<para>Geometry A contains Geometry B if and only if no points of B lie in the exterior of A, and at least one point of the interior of B lies in the interior of A.
-		An important subtlety of this definition is that A does not contain its boundary, but A does contain itself. Contrast that to <xref linkend="ST_ContainsProperly" /> where geometry
-		A does not Contain Properly itself.</para>
+		<para>Returns TRUE if geometry B is completely inside geometry A.
+        A contains B if and only if no points of B lie in the exterior of A, and at least one point of the interior of B lies in the interior of A.
+        </para>
+        <para>A subtlety of the definition is that a geometry does not contain its boundary.
+        This implies that polygons and lines do <emphasis>not</emphasis> contain lines and points lying in their boundary.
+        For further details see <ulink url="http://lin-ear-th-inking.blogspot.com/2007/06/subtleties-of-ogc-covers-spatial.html">Subtleties of OGC Covers, Contains, Within</ulink>.
+        (The <xref linkend="ST_Covers" /> predicate provides a more inclusive relationship.)
+        However, a geometry does contain itself.
+        (In contrast, in the <xref linkend="ST_ContainsProperly" />
+        predicate a geometry does <emphasis>not</emphasis> properly contain itself.)</para>
 
-		<para>Returns TRUE if geometry B is completely inside geometry A. For this function to make
-		sense, the source geometries must both be of the same coordinate projection,
-		having the same SRID.  ST_Contains is the inverse of ST_Within.  So ST_Contains(A,B) implies ST_Within(B,A) except in the case of
-		invalid geometries where the result is always false regardless or not defined.</para>
+        <para>ST_Contains is the inverse of <xref linkend="ST_Within"/>.
+        So, <code>ST_Contains(A,B) = ST_Within(B,A)</code>.</para>
+
+        <note><para>&index_aware;
+        To avoid index use, use the function <function>_ST_Contains</function>.</para></note>
 
 		<para>Performed by the GEOS module</para>
 		<para>Enhanced: 2.3.0 Enhancement to PIP short-circuit extended to support MultiPoints with few points. Prior versions only supported point in polygon.</para>
@@ -121,11 +126,6 @@
 		  <para>Do not use this function with invalid geometries. You will get unexpected results.</para>
 		</important>
 
-		<para>This function call will automatically include a bounding box
-			comparison that will make use of any indexes that are available on
-			the geometries. To avoid index use, use the function
-			_ST_Contains.</para>
-
 		<para>NOTE: this is the "allowable" version that returns a
 			boolean, not an integer.</para>
 
@@ -133,8 +133,6 @@
 		- same as within(geometry B, geometry A)</para>
 		<para>&sqlmm_compliant;	SQL-MM 3: 5.1.31</para>
 
-		<para>There are certain subtleties to ST_Contains and ST_Within that are not intuitively obvious.
-			For details check out <ulink url="http://lin-ear-th-inking.blogspot.com/2007/06/subtleties-of-ogc-covers-spatial.html">Subtleties of OGC Covers, Contains, Within</ulink></para>
 	  </refsection>
 
 	  <refsection>
@@ -264,7 +262,7 @@ ST_Point      | t          | t              | f           | f
 	  <refnamediv>
 		<refname>ST_ContainsProperly</refname>
 
-		<refpurpose>Returns true if B intersects the interior of A but not the boundary (or exterior). A does not contain properly itself, but does contain itself.</refpurpose>
+		<refpurpose>Returns true if B intersects the interior of A but not the boundary or exterior. </refpurpose>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
@@ -284,19 +282,23 @@ ST_Point      | t          | t              | f           | f
 	  <refsection>
 		<title>Description</title>
 
-		<para>Returns true if B intersects the interior of A but not the boundary (or exterior).</para>
+		<para>Returns true if B intersects the interior of A but not the boundary or exterior.</para>
 
-		<para>A does not contain properly itself, but does contain itself.</para>
+		<para>A does not properly contain itself, but does contain itself.</para>
 		<para>Every point of the other geometry is a point of this geometry's interior. The DE-9IM Intersection Matrix for the two geometries matches
    [T**FF*FF*] used in <xref linkend="ST_Relate" /></para>
 
-		<note>
-		  <para>From JTS docs slightly reworded: The advantage to using this predicate over <xref linkend="ST_Contains" /> and <xref linkend="ST_Intersects" /> is that it can be computed
-	  efficiently, with no need to compute topology at individual points.</para>
 		<para>
-			 An example use case for this predicate is computing the intersections of a set of geometries with a large polygonal geometry. Since intersection is a fairly slow operation, it can be more efficient to use containsProperly to filter out test geometries which lie
-	wholly inside the area.  In these cases the intersection is	known a priori to be exactly the original test geometry.
-	 </para>
+		An example use case for this predicate is computing the intersections of a set of geometries with a large polygonal geometry. Since intersection is a fairly slow operation, it can be more efficient to use containsProperly to filter out test geometries which lie
+	    wholly inside the area.  In these cases the intersection is	known a priori to be exactly the original test geometry.
+	    </para>
+
+		<note><para>&index_aware;
+         To avoid index use, use the function <function>_ST_ContainsProperly</function>.</para></note>
+
+		<note>
+		  <para>The advantage of this predicate over <xref linkend="ST_Contains" /> and <xref linkend="ST_Intersects" /> is that it can be computed
+	        more efficiently, with no need to compute topology at individual points.</para>
 		</note>
 		<para>Performed by the GEOS module.</para>
 		<para>Availability: 1.4.0</para>
@@ -308,11 +310,6 @@ ST_Point      | t          | t              | f           | f
 		<important>
 		  <para>Do not use this function with invalid geometries. You will get unexpected results.</para>
 		</important>
-
-		<para>This function call will automatically include a bounding box
-			comparison that will make use of any indexes that are available on
-			the geometries. To avoid index use, use the function
-			_ST_ContainsProperly.</para>
 
 	  </refsection>
 
@@ -355,12 +352,93 @@ ST_Point      | t          | t              | f           | f
 	  </refsection>
  </refentry>
 
+  <refentry id="ST_CoveredBy">
+	  <refnamediv>
+		<refname>ST_CoveredBy</refname>
+
+		<refpurpose>Returns true if no point in A is outside B</refpurpose>
+	  </refnamediv>
+
+	  <refsynopsisdiv>
+		<funcsynopsis>
+		  <funcprototype>
+			<funcdef>boolean <function>ST_CoveredBy</function></funcdef>
+
+			<paramdef><type>geometry </type>
+			<parameter>geomA</parameter></paramdef>
+
+			<paramdef><type>geometry </type>
+			<parameter>geomB</parameter></paramdef>
+		  </funcprototype>
+
+		  <funcprototype>
+			<funcdef>boolean <function>ST_CoveredBy</function></funcdef>
+
+			<paramdef><type>geography </type>
+			<parameter>geogA</parameter></paramdef>
+
+			<paramdef><type>geography </type>
+			<parameter>geogB</parameter></paramdef>
+		  </funcprototype>
+		</funcsynopsis>
+	  </refsynopsisdiv>
+
+	  <refsection>
+		<title>Description</title>
+
+		  <para>Returns <varname>true</varname> if no point in Geometry/Geography A lies outside
+            Geometry/Geography B.
+            Equivalently, tests if every point of geometry A is inside
+            (i.e. intersects the interior or boundary of) geometry B.
+            </para>
+
+		<note><para>&index_aware;
+         To avoid index use, use the function <function>_ST_CoveredBy</function>.</para></note>
+
+		<important>
+		  <para>Enhanced: 3.0.0 enabled support for <varname>GEOMETRYCOLLECTION</varname></para>
+		</important>
+
+		<important>
+		  <para>Do not use this function with invalid geometries. You will get unexpected results.</para>
+		</important>
+		<para>Performed by the GEOS module</para>
+		<para>Availability: 1.2.2</para>
+
+		<para>NOTE: this is the "allowable" version that returns a
+			boolean, not an integer.</para>
+
+		<para>Not an OGC standard, but Oracle has it too.</para>
+	  </refsection>
+
+	  <refsection>
+		<title>Examples</title>
+		  <programlisting>
+	--a circle coveredby a circle
+SELECT ST_CoveredBy(smallc,smallc) As smallinsmall,
+	ST_CoveredBy(smallc, bigc) As smallcoveredbybig,
+	ST_CoveredBy(ST_ExteriorRing(bigc), bigc) As exteriorcoveredbybig,
+	ST_Within(ST_ExteriorRing(bigc),bigc) As exeriorwithinbig
+FROM (SELECT ST_Buffer(ST_GeomFromText('POINT(1 2)'), 10) As smallc,
+	ST_Buffer(ST_GeomFromText('POINT(1 2)'), 20) As bigc) As foo;
+	--Result
+ smallinsmall | smallcoveredbybig | exteriorcoveredbybig | exeriorwithinbig
+--------------+-------------------+----------------------+------------------
+ t            | t                 | t                    | f
+(1 row)	</programlisting>
+	  </refsection>
+
+	  <refsection>
+		<title>See Also</title>
+		<para><xref linkend="ST_Contains"/>, <xref linkend="ST_Covers" />, <xref linkend="ST_ExteriorRing"/>, <xref linkend="ST_Within"/></para>
+	  </refsection>
+ </refentry>
+
   <refentry id="ST_Covers">
 	  <refnamediv>
 		<refname>ST_Covers</refname>
 
-		<refpurpose>Returns 1 (TRUE) if no point in Geometry B is outside
-			Geometry A</refpurpose>
+		<refpurpose>Returns true if no point in B is outside A</refpurpose>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
@@ -389,8 +467,14 @@ ST_Point      | t          | t              | f           | f
 	  <refsection>
 		<title>Description</title>
 
-		  <para>Returns 1 (TRUE) if no point in Geometry/Geography B is outside
-			Geometry/Geography A</para>
+		  <para>Returns <varname>true</varname> if no point in Geometry/Geography B is outside
+			Geometry/Geography A.
+            Equivalently, tests if every point of geometry B is inside
+            (i.e. intersects the interior or boundary of) geometry A.
+            </para>
+
+		<note><para>&index_aware;
+         To avoid index use, use the function <function>_ST_Covers</function>.</para></note>
 
 		<important>
 		  <para>Enhanced: 3.0.0 enabled support for <varname>GEOMETRYCOLLECTION</varname></para>
@@ -399,11 +483,6 @@ ST_Point      | t          | t              | f           | f
 		<important>
 		  <para>Do not use this function with invalid geometries. You will get unexpected results.</para>
 		</important>
-
-		<para>This function call will automatically include a bounding box
-			comparison that will make use of any indexes that are available on
-			the geometries. To avoid index use, use the function
-			_ST_Covers.</para>
 
 		<para>Performed by the GEOS module</para>
     <para>Enhanced: 2.4.0 Support for polygon in polygon and line in polygon added for geography type</para>
@@ -415,8 +494,6 @@ ST_Point      | t          | t              | f           | f
 			boolean, not an integer.</para>
 
 		<para>Not an OGC standard, but Oracle has it too.</para>
-		<para>There are certain subtleties to ST_Contains and ST_Within that are not intuitively obvious.
-			For details check out <ulink url="http://lin-ear-th-inking.blogspot.com/2007/06/subtleties-of-ogc-covers-spatial.html">Subtleties of OGC Covers, Contains, Within</ulink></para>
 	  </refsection>
 
 	  <refsection>
@@ -455,94 +532,11 @@ SELECT ST_Covers(geog_poly, geog_pt) As poly_covers_pt,
 	  </refsection>
  </refentry>
 
-  <refentry id="ST_CoveredBy">
-	  <refnamediv>
-		<refname>ST_CoveredBy</refname>
-
-		<refpurpose>Returns 1 (TRUE) if no point in Geometry/Geography A is outside
-			Geometry/Geography B</refpurpose>
-	  </refnamediv>
-
-	  <refsynopsisdiv>
-		<funcsynopsis>
-		  <funcprototype>
-			<funcdef>boolean <function>ST_CoveredBy</function></funcdef>
-
-			<paramdef><type>geometry </type>
-			<parameter>geomA</parameter></paramdef>
-
-			<paramdef><type>geometry </type>
-			<parameter>geomB</parameter></paramdef>
-		  </funcprototype>
-
-		  <funcprototype>
-			<funcdef>boolean <function>ST_CoveredBy</function></funcdef>
-
-			<paramdef><type>geography </type>
-			<parameter>geogA</parameter></paramdef>
-
-			<paramdef><type>geography </type>
-			<parameter>geogB</parameter></paramdef>
-		  </funcprototype>
-		</funcsynopsis>
-	  </refsynopsisdiv>
-
-	  <refsection>
-		<title>Description</title>
-
-		  <para>Returns 1 (TRUE) if no point in Geometry/Geography A is outside
-			Geometry/Geography B</para>
-
-		<important>
-		  <para>Enhanced: 3.0.0 enabled support for <varname>GEOMETRYCOLLECTION</varname></para>
-		</important>
-
-		<important>
-		  <para>Do not use this function with invalid geometries. You will get unexpected results.</para>
-		</important>
-		<para>Performed by the GEOS module</para>
-		<para>Availability: 1.2.2</para>
-		<para>This function call will automatically include a bounding box
-			comparison that will make use of any indexes that are available on
-			the geometries. To avoid index use, use the function
-			_ST_CoveredBy.</para>
-
-		<para>NOTE: this is the "allowable" version that returns a
-			boolean, not an integer.</para>
-
-		<para>Not an OGC standard, but Oracle has it too.</para>
-		<para>There are certain subtleties to ST_Contains and ST_Within that are not intuitively obvious.
-			For details check out <ulink url="http://lin-ear-th-inking.blogspot.com/2007/06/subtleties-of-ogc-covers-spatial.html">Subtleties of OGC Covers, Contains, Within</ulink></para>
-	  </refsection>
-
-	  <refsection>
-		<title>Examples</title>
-		  <programlisting>
-	--a circle coveredby a circle
-SELECT ST_CoveredBy(smallc,smallc) As smallinsmall,
-	ST_CoveredBy(smallc, bigc) As smallcoveredbybig,
-	ST_CoveredBy(ST_ExteriorRing(bigc), bigc) As exteriorcoveredbybig,
-	ST_Within(ST_ExteriorRing(bigc),bigc) As exeriorwithinbig
-FROM (SELECT ST_Buffer(ST_GeomFromText('POINT(1 2)'), 10) As smallc,
-	ST_Buffer(ST_GeomFromText('POINT(1 2)'), 20) As bigc) As foo;
-	--Result
- smallinsmall | smallcoveredbybig | exteriorcoveredbybig | exeriorwithinbig
---------------+-------------------+----------------------+------------------
- t            | t                 | t                    | f
-(1 row)	</programlisting>
-	  </refsection>
-
-	  <refsection>
-		<title>See Also</title>
-		<para><xref linkend="ST_Contains"/>, <xref linkend="ST_Covers" />, <xref linkend="ST_ExteriorRing"/>, <xref linkend="ST_Within"/></para>
-	  </refsection>
- </refentry>
-
   <refentry id="ST_Crosses">
 	<refnamediv>
 	  <refname>ST_Crosses</refname>
 
-	  <refpurpose>Returns <varname>TRUE</varname> if the supplied geometries have some, but not all,
+	  <refpurpose>Returns true if two geometries have some, but not all,
 	  interior points in common.</refpurpose>
 	</refnamediv>
 
@@ -562,18 +556,15 @@ FROM (SELECT ST_Buffer(ST_GeomFromText('POINT(1 2)'), 10) As smallc,
 	  <title>Description</title>
 
 	  <para><function>ST_Crosses</function> takes two geometry objects and
-	  returns <varname>TRUE</varname> if their intersection "spatially cross", that is, the
+	  returns <varname>true</varname> if their intersection "spatially cross", that is, the
 	  geometries have some, but not all interior points in common. The
 	  intersection of the interiors of the geometries must not be the empty
 	  set and must have a dimensionality less than the maximum dimension
 	  of the two input geometries. Additionally, the intersection of the two
 	  geometries must not equal either of the source geometries. Otherwise, it
-	  returns <varname>FALSE</varname>.</para>
+	  returns <varname>false</varname>.</para>
 
 	  <para>In mathematical terms, this is expressed as:</para>
-
-	  <remark>TODO: Insert appropriate MathML markup here or use a gif.
-	  Simple HTML markup does not work well in both IE and Firefox.</remark>
 
 	  <informalfigure>
 		<mediaobject>
@@ -610,15 +601,11 @@ FROM (SELECT ST_Buffer(ST_GeomFromText('POINT(1 2)'), 10) As smallc,
 		Area/Line situations as well. This makes the relation
 		symmetric.</para>
 
+	<note><para>&index_aware;</para></note>
+
 		<important>
 		  <para>Enhanced: 3.0.0 enabled support for <varname>GEOMETRYCOLLECTION</varname></para>
 		</important>
-
-	<note>
-	  <para>This function call will automatically include a bounding box
-	  comparison that will make use of any indexes that are available on the
-	  geometries.</para>
-	</note>
 
 	<para>&sfs_compliant; s2.1.13.3</para>
 	<para>&sqlmm_compliant; SQL-MM 3: 5.1.29</para>
@@ -721,7 +708,7 @@ WHERE ST_Crosses(roads.the_geom, highways.the_geom);</programlisting>
 	<refnamediv>
 	  <refname>ST_LineCrossingDirection</refname>
 
-	  <refpurpose>Given 2 linestrings, returns a number between -3 and 3 denoting what kind of crossing behavior. 0 is no crossing.</refpurpose>
+	  <refpurpose>Returns a number indicating the crossing behavior of two LineStrings.</refpurpose>
 	</refnamediv>
 
 	<refsynopsisdiv>
@@ -737,8 +724,12 @@ WHERE ST_Crosses(roads.the_geom, highways.the_geom);</programlisting>
 	<refsection>
 	  <title>Description</title>
 
-	  <para>Given 2 linestrings, returns a number between -3 and 3 denoting what kind of crossing behavior. 0 is no crossing.  This is only supported for <varname>LINESTRING</varname></para>
-	  <para>Definition of integer constants is as follows:
+	  <para>Given 2 linestrings, returns an integer between -3 and 3
+      indicating what kind of crossing behavior exists between them.
+      0 indicates no crossing.
+      This is only supported for <varname>LINESTRING</varname>s.
+      </para>
+	  <para>The crossing number has the following meaning:
 		   <itemizedlist>
 				<listitem>
 				  <para> 0: LINE NO CROSS</para>
@@ -902,8 +893,8 @@ WHERE ST_CrossingDirection(s1.the_geom, s2.the_geom) > 0;
 		<refnamediv>
 			<refname>ST_Disjoint</refname>
 
-			<refpurpose>Returns TRUE if the Geometries do not "spatially
-			intersect" - if they do not share any space together.
+			<refpurpose>Returns true if two geometries do not
+			intersect (they have no point in common).
 			</refpurpose>
 		</refnamediv>
 		<refsynopsisdiv>
@@ -970,8 +961,7 @@ SELECT ST_Disjoint('POINT(0 0)'::geometry, 'LINESTRING ( 0 0, 0 2 )'::geometry);
 	  <refnamediv>
 		<refname>ST_Equals</refname>
 
-		<refpurpose>Returns true if the given geometries represent the same geometry. Directionality
-			is ignored.</refpurpose>
+		<refpurpose>Returns true if two geometries include the same set of points.</refpurpose>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
@@ -1040,9 +1030,8 @@ SELECT ST_Equals(ST_Reverse(ST_GeomFromText('LINESTRING(0 0, 10 10)')),
 		<refnamediv>
 			<refname>ST_Intersects</refname>
 
-			<refpurpose>Returns TRUE if the Geometries/Geography "spatially
-			intersect in 2D" - (share any portion of space) and FALSE if they don't (they are Disjoint).
-			For geography tolerance is 0.00001 meters (so any points that close are considered to intersect)
+			<refpurpose>Returns true if two geometries
+			intersect (they have at least one point in common).
 			</refpurpose>
 		</refnamediv>
 		<refsynopsisdiv>
@@ -1080,16 +1069,13 @@ SELECT ST_Equals(ST_Reverse(ST_GeomFromText('LINESTRING(0 0, 10 10)')),
 				returns true, then the geometries also spatially intersect.
 				Disjoint implies false for spatial intersection.</para>
 
+			<note><para>&index_aware;</para></note>
+
 			<para>Changed: 3.0.0 SFCGAL version removed and native suppport for 2D TINS added.</para>
 			<para>Enhanced: 2.5.0 Supports GEOMETRYCOLLECTION.</para>
 			<para>Enhanced: 2.3.0 Enhancement to PIP short-circuit extended to support MultiPoints with few points. Prior versions only supported point in polygon.</para>
 			<para>Performed by the GEOS module (for geometry), geography is native</para>
 			<para>Availability: 1.5 support for geography was introduced.</para>
-			<note>
-			  <para>This function call will automatically include a bounding box
-			  comparison that will make use of any indexes that are available on the
-			  geometries.</para>
-			</note>
 			<note>
 			  <para>For geography, this function has a distance tolerance of about 0.00001 meters and uses the sphere rather
 				than spheroid calculation.</para>
@@ -1141,7 +1127,7 @@ t
 		</refsection>
 		<refsection>
 			<title>See Also</title>
-			<para> <xref linkend="ST_3DIntersects" />, <xref linkend="ST_Disjoint"/></para>
+			<para><xref linkend="geometry_overlaps" />, <xref linkend="ST_3DIntersects" />, <xref linkend="ST_Disjoint"/></para>
 		</refsection>
 	</refentry>
 
@@ -1149,8 +1135,8 @@ t
 	  <refnamediv>
 		<refname>ST_OrderingEquals</refname>
 
-		<refpurpose>Returns true if the given geometries represent the same geometry
-		and points are in the same directional order.</refpurpose>
+		<refpurpose>Returns true if two geometries represent the same geometry
+		and have points in the same directional order.</refpurpose>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
@@ -1205,7 +1191,7 @@ SELECT ST_OrderingEquals(ST_Reverse(ST_GeomFromText('LINESTRING(0 0, 10 10)')),
 		  </refsection>
 		  <refsection>
 			<title>See Also</title>
-			<para><xref linkend="ST_Equals"/>, <xref linkend="ST_Reverse"/></para>
+			<para><xref linkend="geometry_overlaps" />, <xref linkend="ST_Equals"/>, <xref linkend="ST_Reverse"/></para>
 		  </refsection>
 	</refentry>
 
@@ -1213,7 +1199,7 @@ SELECT ST_OrderingEquals(ST_Reverse(ST_GeomFromText('LINESTRING(0 0, 10 10)')),
 	  <refnamediv>
 		<refname>ST_Overlaps</refname>
 
-		<refpurpose>Returns TRUE if the Geometries share space, are of the same dimension, but are not completely contained by each other.</refpurpose>
+		<refpurpose>Returns true if two geometries intersect and have the same dimension, but are not completely contained by each other.</refpurpose>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
@@ -1232,16 +1218,14 @@ SELECT ST_OrderingEquals(ST_Reverse(ST_GeomFromText('LINESTRING(0 0, 10 10)')),
 		<para>Returns TRUE if the Geometries "spatially
 			overlap".  By that we mean they intersect, but one does not completely contain another. </para>
 
-		 <para>Performed by the GEOS module</para>
+		<note><para>&index_aware;
+        To avoid index use, use the function <function>_ST_Overlaps</function>.</para></note>
+
+		<para>Performed by the GEOS module</para>
 
 		<important>
 		  <para>Enhanced: 3.0.0 enabled support for <varname>GEOMETRYCOLLECTION</varname></para>
 		</important>
-
-		<para>This function call will automatically include a bounding box
-		comparison that will make use of any indexes that are available on
-		the geometries. To avoid index use, use the function
-		_ST_Overlaps.</para>
 
 		<para>NOTE: this is the "allowable" version that returns a
 			boolean, not an integer.</para>
@@ -1343,11 +1327,10 @@ FROM (SELECT ST_Buffer(ST_GeomFromText('POINT(1 0.5)'), 3)  As a,
 		<refnamediv>
 			<refname>ST_Relate</refname>
 
-			<refpurpose>Returns true if this Geometry is spatially related to
-					anotherGeometry, by testing for intersections between the
-					Interior, Boundary and Exterior of the two geometries as specified
-					by the values in the intersectionMatrixPattern.  If no intersectionMatrixPattern
-					is passed in, then returns the maximum intersectionMatrixPattern that relates the 2 geometries.</refpurpose>
+			<refpurpose>Tests if two geometries have a topological relationship
+            matching an Intersection Matrix pattern,
+            or computes their Intersection Matrix
+            </refpurpose>
 		</refnamediv>
 
 		<refsynopsisdiv>
@@ -1369,7 +1352,7 @@ FROM (SELECT ST_Buffer(ST_GeomFromText('POINT(1 0.5)'), 3)  As a,
 				<funcdef>text <function>ST_Relate</function></funcdef>
 				<paramdef><type>geometry </type> <parameter>geomA</parameter></paramdef>
 				<paramdef><type>geometry </type> <parameter>geomB</parameter></paramdef>
-				<paramdef><type>integer </type> <parameter>BoundaryNodeRule</parameter></paramdef>
+				<paramdef><type>integer </type> <parameter>boundaryNodeRule</parameter></paramdef>
 			  </funcprototype>
 			</funcsynopsis>
 		</refsynopsisdiv>
@@ -1377,75 +1360,134 @@ FROM (SELECT ST_Buffer(ST_GeomFromText('POINT(1 0.5)'), 3)  As a,
 		<refsection>
 			<title>Description</title>
 
-			<para>Version 1: Takes geomA, geomB, intersectionMatrix and Returns 1 (TRUE) if this Geometry is spatially related to
-					anotherGeometry, by testing for intersections between the
-					Interior, Boundary and Exterior of the two geometries as specified
-					by the values in the <ulink url="http://en.wikipedia.org/wiki/DE-9IM">DE-9IM matrix pattern</ulink>.</para>
+            <para>
+            These functions allow testing and evaluating the spatial (topological) relationship between two geometries,
+            as defined by the <ulink url="http://en.wikipedia.org/wiki/DE-9IM">Dimensionally Extended 9-Intersection Model</ulink> (DE-9IM).
+            </para>
+            <para>
+            The DE-9IM is specified as a 9-element matrix indicating the dimension of the intersections between the
+            Interior, Boundary and Exterior of two geometries.
+            It is represented by a 9-character text string using the symbols 'F', '0', '1', '2'
+            (e.g. <code>'FF1FF0102'</code>).
+            </para>
+            <para>
+            A specific kind of spatial relationships is evaluated by comparing the intersection
+            matrix to an <emphasis>intersection matrix pattern</emphasis>.
+            A pattern can include the additional symbols 'T' and '*'.
+            Common spatial relationships are provided by the named functions
+            <xref linkend="ST_Contains" />, <xref linkend="ST_ContainsProperly" />,
+            <xref linkend="ST_Covers" />, <xref linkend="ST_CoveredBy" />,
+            <xref linkend="ST_Crosses" />, <xref linkend="ST_Disjoint" />, <xref linkend="ST_Equals" />,
+            <xref linkend="ST_Intersects" />, <xref linkend="ST_Overlaps" />, <xref linkend="ST_Touches" />,
+            and <xref linkend="ST_Within" />.
+            Using an explicit pattern allows testing multiple conditions of intersects, crosses, etc in one step.
+            It also allows testing spatial relationships which do not have a named spatial relationship function.
+            For example, the relationship "Interior-Intersects" has the DE-9IM pattern <code>T********</code>,
+            which is not evaluated by any named predicate.
+            </para>
+            <para>
+             For more information refer to <xref linkend="eval_spatial_rel" />.
+            </para>
 
-			<para>This is especially useful for testing compound checks of intersection, crosses, etc in one step.</para>
+			<para><emphasis role="bold">Variant 1:</emphasis> Tests if two geometries are spatially related
+            according to the given <varname>intersectionMatrixPattern</varname>.
+            </para>
 
-			<note><para>This is the "allowable" version that returns a
-			boolean, not an integer.  This is defined in OGC spec</para></note>
-
-			<note><para>This DOES NOT automagically include an index call.  The reason for that
-				is some relationships are anti e.g. Disjoint.  If you are
+			<note><para>Unlike most of the named spatial relationship predicates,
+                this does NOT automatically include an index call.
+                The reason is that some relationships are true for geometries
+                which do NOT intersect (e.g. Disjoint).  If you are
 				using a relationship pattern that requires intersection, then include the &amp;&amp;
-				index call.</para></note>
+				index call.
+                </para></note>
 
-			<para>Version 2: Takes geomA and geomB and returns the <xref linkend="DE-9IM" /></para>
+			<note><para>It is better to use a named relationship function if available,
+            since they automatically use a spatial index where one exists.
+            Also, they may implement performance optimizations which are not available
+            with full relate evalation.
+                </para></note>
 
-			<para>Version 3: same as version 2, but allows to specify a boundary node rule (1:OGC/MOD2, 2:Endpoint, 3:MultivalentEndpoint, 4:MonovalentEndpoint)</para>
+			<para><emphasis role="bold">Variant 2:</emphasis> Returns the DE-9IM matrix string for the
+            spatial relationship between the two input geometries.
+            The matrix string can be tested for matching a DE-9IM pattern using <xref linkend="ST_RelateMatch" />.
+            </para>
 
-			<important>
-			  <para>Enhanced: 3.0.0 enabled support for <varname>GEOMETRYCOLLECTION</varname></para>
-			</important>
+			<para><emphasis role="bold">Variant 3:</emphasis> Like variant 2,
+            but allows specifying a <emphasis role="bold">Boundary Node Rule</emphasis>.
+            A boundary node rule allows finer control over whether geometry boundary points are
+            considered to lie in the DE-9IM Interior or Boundary.
+            The <varname>boundaryNodeRule</varname> code is:
+            1: OGC/MOD2, 2: Endpoint, 3: MultivalentEndpoint, 4: MonovalentEndpoint. </para>
 
-			<para>not in OGC spec, but implied. see s2.1.13.2</para>
+			<para>This function is not in the OGC spec, but is implied. see s2.1.13.2</para>
 			<para>&sfs_compliant; s2.1.1.2 // s2.1.13.3</para>
 			<para>&sqlmm_compliant; SQL-MM 3: 5.1.25</para>
 			<para>Performed by the GEOS module</para>
 			<para>Enhanced: 2.0.0 - added support for specifying boundary node rule.</para>
+			<important>
+			  <para>Enhanced: 3.0.0 enabled support for <varname>GEOMETRYCOLLECTION</varname></para>
+			</important>
+
 		</refsection>
 
 
 		<refsection>
 		<title>Examples</title>
-		<programlisting>
---Find all compounds that intersect and not touch a poly (interior intersects)
-SELECT l.* , b.name As poly_name
-	FROM polys As b
-INNER JOIN compounds As l
-ON (p.the_geom &amp;&amp; b.the_geom
-AND ST_Relate(l.the_geom, b.the_geom,'T********'));
 
-SELECT ST_Relate(ST_GeometryFromText('POINT(1 2)'), ST_Buffer(ST_GeometryFromText('POINT(1 2)'),2));
+        <para>Using the boolean-valued function to test spatial relationships.</para>
+		<programlisting>
+SELECT ST_Relate('POINT(1 2)', ST_Buffer( 'POINT(1 2)', 2), '0FFFFF212');
+st_relate
+-----------
+t
+
+SELECT ST_Relate(POINT(1 2)', ST_Buffer( 'POINT(1 2)', 2), '*FF*FF212');
+st_relate
+-----------
+t
+</programlisting>
+
+        <para>Testing a custom spatial relationship pattern as a query condition,
+        with <code>&amp;&amp;</code> to enable using a spatial index.</para>
+		<programlisting>
+-- Find compounds that properly intersect (not just touch) a poly (Interior Intersects)
+
+SELECT c.* , p.name As poly_name
+    FROM polys AS p
+    INNER JOIN compounds As c
+          ON c.geom &amp;&amp; p.geom
+             AND ST_Relate(p.geom, c.geom,'T********');
+</programlisting>
+
+         <para>Computing the intersection matrix for spatial relationships.</para>
+		<programlisting>
+SELECT ST_Relate( 'POINT(1 2)',
+                  ST_Buffer( 'POINT(1 2)', 2));
 st_relate
 -----------
 0FFFFF212
 
-SELECT ST_Relate(ST_GeometryFromText('LINESTRING(1 2, 3 4)'), ST_GeometryFromText('LINESTRING(5 6, 7 8)'));
+SELECT ST_Relate( 'LINESTRING(1 2, 3 4)',
+                  'LINESTRING(5 6, 7 8)' );
 st_relate
 -----------
 FF1FF0102
+</programlisting>
 
-
-SELECT ST_Relate(ST_GeometryFromText('POINT(1 2)'), ST_Buffer(ST_GeometryFromText('POINT(1 2)'),2), '0FFFFF212');
-st_relate
------------
-t
-
-SELECT ST_Relate(ST_GeometryFromText('POINT(1 2)'), ST_Buffer(ST_GeometryFromText('POINT(1 2)'),2), '*FF*FF212');
-st_relate
------------
-t
-		</programlisting>
 	</refsection>
 
 	<!-- Optionally add a "See Also" section -->
 	<refsection>
 		<title>See Also</title>
 
-		<para><xref linkend="ST_Crosses" />, <xref linkend="DE-9IM" />, <xref linkend="ST_Disjoint" />, <xref linkend="ST_Intersects" />, <xref linkend="ST_Touches" /></para>
+		<para>
+            <xref linkend="eval_spatial_rel" />, <xref linkend="ST_RelateMatch" />,
+            <xref linkend="ST_Contains" />, <xref linkend="ST_ContainsProperly" />,
+            <xref linkend="ST_Covers" />, <xref linkend="ST_CoveredBy" />,
+            <xref linkend="ST_Crosses" />, <xref linkend="ST_Disjoint" />, <xref linkend="ST_Equals" />,
+            <xref linkend="ST_Intersects" />, <xref linkend="ST_Overlaps" />,
+            <xref linkend="ST_Touches" />, <xref linkend="ST_Within" />
+        </para>
 	</refsection>
 </refentry>
 
@@ -1453,7 +1495,8 @@ t
 	<refnamediv>
 		<refname>ST_RelateMatch</refname>
 
-		<refpurpose>Returns true if intersectionMattrixPattern1 implies intersectionMatrixPattern2</refpurpose>
+		<refpurpose>Tests if a DE-9IM Intersection Matrix matches an Intersection Matrix pattern
+        </refpurpose>
 	</refnamediv>
 
 	<refsynopsisdiv>
@@ -1469,9 +1512,17 @@ t
 	<refsection>
 		<title>Description</title>
 
-		<para> Takes intersectionMatrix and intersectionMatrixPattern and Returns true if the intersectionMatrix satisfies
-		the intersectionMatrixPattern. For more information refer to <xref linkend="DE-9IM" />.	</para>
+		<para>
+        Tests if a <ulink url="http://en.wikipedia.org/wiki/DE-9IM">Dimensionally Extended 9-Intersection Model</ulink> (DE-9IM)
+        <varname>intersectionMatrix</varname> value satisfies
+		an <varname>intersectionMatrixPattern</varname>.
+        Intersection matrix values can be computed by <xref linkend="ST_Relate" />.
+        </para>
+        <para>
+        For more information refer to <xref linkend="eval_spatial_rel" />.
+        </para>
 		<para>Performed by the GEOS module</para>
+
 		<para>Availability: 2.0.0</para>
 	</refsection>
 
@@ -1482,27 +1533,44 @@ t
 SELECT ST_RelateMatch('101202FFF', 'TTTTTTFFF') ;
 -- result --
 t
---example of common intersection matrix patterns and example matrices
--- comparing relationships of involving one invalid geometry and ( a line and polygon that intersect at interior and boundary)
-SELECT mat.name, pat.name, ST_RelateMatch(mat.val, pat.val) As satisfied
-    FROM
-        ( VALUES ('Equality', 'T1FF1FFF1'),
-                ('Overlaps', 'T*T***T**'),
-                ('Within', 'T*F**F***'),
-                ('Disjoint', 'FF*FF****') As pat(name,val)
-        CROSS JOIN
-            (	VALUES ('Self intersections (invalid)', '111111111'),
-                    ('IE2_BI1_BB0_BE1_EI1_EE2', 'FF2101102'),
-                    ('IB1_IE1_BB0_BE0_EI2_EI1_EE2', 'F11F00212')
-            ) As mat(name,val);
+</programlisting>
+		<para>Patterns for common spatial relationships
+matched against intersection matrix values,
+for a line in various positions relative to a polygon</para>
+		<programlisting>
+SELECT pat.name AS relationship, pat.val AS pattern,
+       mat.name AS position, mat.val AS matrix,
+       ST_RelateMatch(mat.val, pat.val) AS match
+    FROM (VALUES ( 'Equality', 'T1FF1FFF1' ),
+                 ( 'Overlaps', 'T*T***T**' ),
+                 ( 'Within',   'T*F**F***' ),
+                 ( 'Disjoint', 'FF*FF****' )) AS pat(name,val)
+    CROSS JOIN
+        (VALUES  ('non-intersecting', 'FF1FF0212'),
+                 ('overlapping',      '1010F0212'),
+                 ('inside',           '1FF0FF212')) AS mat(name,val);
 
-		</programlisting>
+ relationship |  pattern  |     position     |  matrix   | match
+--------------+-----------+------------------+-----------+-------
+ Equality     | T1FF1FFF1 | non-intersecting | FF1FF0212 | f
+ Equality     | T1FF1FFF1 | overlapping      | 1010F0212 | f
+ Equality     | T1FF1FFF1 | inside           | 1FF0FF212 | f
+ Overlaps     | T*T***T** | non-intersecting | FF1FF0212 | f
+ Overlaps     | T*T***T** | overlapping      | 1010F0212 | t
+ Overlaps     | T*T***T** | inside           | 1FF0FF212 | f
+ Within       | T*F**F*** | non-intersecting | FF1FF0212 | f
+ Within       | T*F**F*** | overlapping      | 1010F0212 | f
+ Within       | T*F**F*** | inside           | 1FF0FF212 | t
+ Disjoint     | FF*FF**** | non-intersecting | FF1FF0212 | t
+ Disjoint     | FF*FF**** | overlapping      | 1010F0212 | f
+ Disjoint     | FF*FF**** | inside           | 1FF0FF212 | f
+</programlisting>
 	</refsection>
 
 	<!-- Optionally add a "See Also" section -->
 	<refsection>
 		<title>See Also</title>
-		<para><xref linkend="DE-9IM" />, <xref linkend="ST_Relate" /></para>
+		<para><xref linkend="eval_spatial_rel" />, <xref linkend="ST_Relate" /></para>
 	</refsection>
 </refentry>
 
@@ -1510,7 +1578,7 @@ SELECT mat.name, pat.name, ST_RelateMatch(mat.val, pat.val) As satisfied
 	  <refnamediv>
 		<refname>ST_Touches</refname>
 
-		<refpurpose>Returns <varname>TRUE</varname> if the geometries have at least one point in common,
+		<refpurpose>Returns true if two geometries have at least one point in common,
 		but their interiors do not intersect.</refpurpose>
 	  </refnamediv>
 
@@ -1520,10 +1588,10 @@ SELECT mat.name, pat.name, ST_RelateMatch(mat.val, pat.val) As satisfied
 			<funcdef>boolean <function>ST_Touches</function></funcdef>
 
 			<paramdef><type>geometry </type>
-			<parameter>g1</parameter></paramdef>
+			<parameter>A</parameter></paramdef>
 
 			<paramdef><type>geometry </type>
-			<parameter>g2</parameter></paramdef>
+			<parameter>B</parameter></paramdef>
 		  </funcprototype>
 		</funcsynopsis>
 	  </refsynopsisdiv>
@@ -1531,14 +1599,13 @@ SELECT mat.name, pat.name, ST_RelateMatch(mat.val, pat.val) As satisfied
 	  <refsection>
 		<title>Description</title>
 
-		<para>Returns <varname>TRUE</varname> if the only points in common between
-		<parameter>g1</parameter> and <parameter>g2</parameter> lie in the union of the
-		boundaries of <parameter>g1</parameter> and <parameter>g2</parameter>.
-		The <function>ST_Touches</function> relation applies
-		to all Area/Area, Line/Line, Line/Area, Point/Area and Point/Line pairs of relationships,
-		but <emphasis>not</emphasis> to the Point/Point pair.</para>
+		<para>Returns <varname>TRUE</varname> if A and B intersect,
+        but their interiors do not intersect.  Equivalently, A and B have at least one point in common,
+        and the common points lie in the intersection of their boundaries.
+		For Point/Point inputs the relationship is always <varname>FALSE</varname>,
+        since points do not have a boundary.</para>
 
-		<para>In mathematical terms, this predicate is expressed as:</para>
+		<para>In mathematical terms, this relationship is expressed as:</para>
 
 		<informalfigure>
 		  <mediaobject>
@@ -1548,7 +1615,7 @@ SELECT mat.name, pat.name, ST_RelateMatch(mat.val, pat.val) As satisfied
 		  </mediaobject>
 		</informalfigure>
 
-		<para>The allowable DE-9IM Intersection Matrices for the two geometries are:</para>
+		<para>This relationship holds if the DE-9IM Intersection Matrix for the two geometries matches one of:</para>
 
 		<itemizedlist>
 		  <listitem>
@@ -1564,15 +1631,13 @@ SELECT mat.name, pat.name, ST_RelateMatch(mat.val, pat.val) As satisfied
 		  </listitem>
 		</itemizedlist>
 
+		<note><para>&index_aware;
+        To avoid using an index, use <function>_ST_Touches</function> instead.</para>
+		</note>
+
 		<important>
 		  <para>Enhanced: 3.0.0 enabled support for <varname>GEOMETRYCOLLECTION</varname></para>
 		</important>
-
-		<note>
-		  <para>This function call will automatically include a bounding box
-		  comparison that will make use of any indexes that are available on
-		  the geometries.  To avoid using an index, use <function>_ST_Touches</function> instead.</para>
-		</note>
 
 		<para>&sfs_compliant; s2.1.1.2 // s2.1.13.3</para>
 		<para>&sqlmm_compliant; SQL-MM 3: 5.1.28</para>
@@ -1669,7 +1734,7 @@ SELECT ST_Touches('LINESTRING(0 0, 1 1, 0 2)'::geometry, 'POINT(0 2)'::geometry)
 	  <refnamediv>
 		<refname>ST_Within</refname>
 
-		<refpurpose>Returns true if the geometry A is completely inside geometry B</refpurpose>
+		<refpurpose>Returns true if no points of A lie in the exterior of B, and A and B have at least one interior point in common.</refpurpose>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
@@ -1694,6 +1759,18 @@ SELECT ST_Touches('LINESTRING(0 0, 1 1, 0 2)'::geometry, 'POINT(0 2)'::geometry)
 		having the same SRID.  It is a given that if ST_Within(A,B) is true and ST_Within(B,A) is true, then
 		the two geometries are considered spatially equal.</para>
 
+        <para>A subtlety of this definition is that the boundary of a geometry is not within the geometry.
+        This means that lines and points lying in the boundary of a polygon or line are <emphasis>not</emphasis> within the geometry.
+        For further details see <ulink url="http://lin-ear-th-inking.blogspot.com/2007/06/subtleties-of-ogc-covers-spatial.html">Subtleties of OGC Covers, Contains, Within</ulink>.
+        (The <xref linkend="ST_CoveredBy" /> predicate provides a more inclusive relationship).
+        </para>
+
+        <para>ST_Within is the inverse of <xref linkend="ST_Contains"/>.
+        So, <code>ST_Within(A,B) = ST_Contains(B,A)</code>.</para>
+
+		<note><para>&index_aware;
+        To avoid index use, use the function <function>_ST_Within</function>.</para></note>
+
 		<para>Performed by the GEOS module</para>
 
 		<para>Enhanced: 2.3.0 Enhancement to PIP short-circuit for geometry extended to support MultiPoints with few points. Prior versions only supported point in polygon.</para>
@@ -1705,11 +1782,6 @@ SELECT ST_Touches('LINESTRING(0 0, 1 1, 0 2)'::geometry, 'POINT(0 2)'::geometry)
 		<important>
 		  <para>Do not use this function with invalid geometries. You will get unexpected results.</para>
 		</important>
-
-		<para>This function call will automatically include a bounding box
-			comparison that will make use of any indexes that are available on
-			the geometries. To avoid index use, use the function
-			_ST_Within.</para>
 
 		<para>NOTE: this is the "allowable" version that returns a
 			boolean, not an integer.</para>
@@ -1750,7 +1822,7 @@ SELECT ST_Buffer(ST_GeomFromText('POINT(50 50)'), 20) As smallc,
 
 	  <refsection>
 		<title>See Also</title>
-		<para><xref linkend="ST_Contains"/>, <xref linkend="ST_Equals"/>, <xref linkend="ST_IsValid"/></para>
+		<para><xref linkend="ST_Contains"/>, <xref linkend="ST_CoveredBy"/>, <xref linkend="ST_Equals"/>, <xref linkend="ST_IsValid"/></para>
 	  </refsection>
 	</refentry>
 
@@ -1764,7 +1836,7 @@ SELECT ST_Buffer(ST_GeomFromText('POINT(50 50)'), 20) As smallc,
 	  <refnamediv>
 		<refname>ST_3DDWithin</refname>
 
-		<refpurpose>For 3d (z) geometry type Returns true if two geometries 3d distance is within number of units. </refpurpose>
+		<refpurpose>Returns true if two 3D geometries are within a given 3D distance</refpurpose>
 	  </refnamediv>
 	  <refsynopsisdiv>
 		<funcsynopsis>
@@ -1786,8 +1858,14 @@ SELECT ST_Buffer(ST_GeomFromText('POINT(50 50)'), 20) As smallc,
 	  <refsection>
 		<title>Description</title>
 
-		<para>For geometry type returns true if the 3d distance between two objects is within distance_of_srid specified
-		projected units (spatial ref units). </para>
+		<para>Returns true if the 3D distance between two geometry values is no larger than
+        distance <varname>distance_of_srid</varname>.
+        The distance is specified in units defined by the spatial reference system of the geometries.
+        For this function to make sense
+        the source geometries must be in the same coordinate system (have the same SRID).
+        </para>
+
+		<note><para>&index_aware;</para></note>
 
         <para>&Z_support;</para>
         <!-- Optionally mention supports Polyhedral Surface  -->
@@ -1823,16 +1901,19 @@ ST_DWithin(
 	  <refsection>
 		<title>See Also</title>
 
-		<para><xref linkend="ST_3DDistance"/>, <xref linkend="ST_Distance"/>, <xref linkend="ST_DWithin"/>, <xref linkend="ST_3DMaxDistance" />, <xref linkend="ST_Transform" /></para>
+		<para>
+        <xref linkend="ST_3DDFullyWithin"/>,
+        <xref linkend="ST_DWithin"/>, <xref linkend="ST_DFullyWithin"/>,
+        <xref linkend="ST_3DDistance"/>, <xref linkend="ST_Distance"/>,
+        <xref linkend="ST_3DMaxDistance" />, <xref linkend="ST_Transform" /></para>
 	  </refsection>
 	</refentry>
 
-<refentry id="ST_3DDFullyWithin">
+    <refentry id="ST_3DDFullyWithin">
 	  <refnamediv>
 		<refname>ST_3DDFullyWithin</refname>
 
-		<refpurpose>Returns true if all of the 3D geometries are within the specified
-		distance of one another. </refpurpose>
+		<refpurpose>Returns true if two 3D geometries are entirely within a given 3D distance</refpurpose>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
@@ -1861,11 +1942,7 @@ ST_DWithin(
 		sense, the source geometries must both be of the same coordinate projection,
 		having the same SRID.</para>
 
-		<note>
-		  <para>This function call will automatically include a bounding box
-		  comparison that will make use of any indexes that are available on
-		  the geometries.</para>
-		</note>
+		<note><para>&index_aware;</para></note>
 
 		<para>Availability: 2.0.0</para>
         <para>&Z_support;</para>
@@ -1892,7 +1969,9 @@ ST_DWithin(
 	  <refsection>
 		<title>See Also</title>
 
-		<para><xref linkend="ST_3DMaxDistance"/>, <xref linkend="ST_3DDWithin"/>, <xref linkend="ST_DWithin"/>, <xref linkend="ST_DFullyWithin"/></para>
+		<para><xref linkend="ST_3DDWithin"/>,
+        <xref linkend="ST_DWithin"/>, <xref linkend="ST_DFullyWithin"/>,
+        <xref linkend="ST_3DMaxDistance"/></para>
 	  </refsection>
 	</refentry>
 
@@ -1900,8 +1979,7 @@ ST_DWithin(
 	  <refnamediv>
 		<refname>ST_DFullyWithin</refname>
 
-		<refpurpose>Returns true if all of the geometries are within the specified
-		distance of one another</refpurpose>
+		<refpurpose>Returns true if two geometries are entirely within a given distance</refpurpose>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
@@ -1924,17 +2002,13 @@ ST_DWithin(
 	  <refsection>
 		<title>Description</title>
 
-		<para>Returns true if the geometries is fully within the specified distance
+		<para>Returns true if the geometries are entirely within the specified distance
 		of one another. The distance is specified in units defined by the
 		spatial reference system of the geometries.  For this function to make
 		sense, the source geometries must both be of the same coordinate projection,
 		having the same SRID.</para>
 
-		<note>
-		  <para>This function call will automatically include a bounding box
-		  comparison that will make use of any indexes that are available on
-		  the geometries.</para>
-		</note>
+		<note><para>&index_aware;</para></note>
 
 		<para>Availability: 1.5.0</para>
 	  </refsection>
@@ -1953,7 +2027,8 @@ ST_DWithin(
 	  <refsection>
 		<title>See Also</title>
 
-		<para><xref linkend="ST_MaxDistance"/>, <xref linkend="ST_DWithin"/></para>
+		<para><xref linkend="ST_MaxDistance"/>,
+        <xref linkend="ST_DWithin"/>, <xref linkend="ST_3DDWithin"/>, <xref linkend="ST_3DDFullyWithin"/></para>
 	  </refsection>
 	</refentry>
 
@@ -1961,9 +2036,7 @@ ST_DWithin(
 	  <refnamediv>
 		<refname>ST_DWithin</refname>
 
-		<refpurpose>Returns true if the geometries are within the specified
-		distance of one another. For geometry units are in those of spatial reference and for geography units are in meters and measurement is
-		defaulted to use_spheroid=true (measure around spheroid), for faster check, use_spheroid=false to measure along sphere.</refpurpose>
+		<refpurpose>Returns true if two geometries are within a given distance</refpurpose>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
@@ -1992,7 +2065,7 @@ ST_DWithin(
 				<parameter>distance_meters</parameter></paramdef>
 
 				<paramdef choice="opt"><type>boolean </type>
-				<parameter>use_spheroid</parameter></paramdef>
+				<parameter>use_spheroid = true</parameter></paramdef>
 		  </funcprototype>
 		</funcsynopsis>
 	  </refsynopsisdiv>
@@ -2000,37 +2073,35 @@ ST_DWithin(
 	  <refsection>
 		<title>Description</title>
 
-		<para>Returns true if the geometries are within the specified distance
-		of one another.</para>
+		<para>Returns true if the geometries are within a given distance</para>
 
 		<para>For <type>geometry</type>: The distance is specified in units defined by the
 		spatial reference system of the geometries.  For this function to make
-		sense, the source geometries must both be of the same coordinate projection,
-		having the same SRID.</para>
+		sense, the source geometries must be in the same coordinate system
+		(have the same SRID).</para>
 
-		<para>For <type>geography</type> units are in meters and measurement is
-		defaulted to <varname>use_spheroid</varname>=true, for faster check, <varname>use_spheroid</varname>=false to measure along sphere.
+		<para>For <type>geography</type>: units are in meters and distance measurement
+		defaults to <varname>use_spheroid</varname>=true.
+        For faster evaluation use <varname>use_spheroid</varname>=false to measure on the sphere.
 		</para>
 
+		<note><para>Use <xref linkend="ST_3DDWithin"/> for 3D geometries.</para></note>
+
 		<note>
-		  <para>This function call will automatically include a bounding box
-		  comparison that will make use of any indexes that are available on
+		  <para>This function call includes a bounding box
+		  comparison that makes use of any indexes that are available on
 		  the geometries.</para>
 		</note>
-
-		<note>
-		  <para>Prior to 1.3, ST_Expand was commonly used in conjunction with &amp;&amp; and ST_Distance to
-		  achieve the same effect and in pre-1.3.4 this function was basically short-hand for that construct.
-		  From 1.3.4, ST_DWithin uses a more short-circuit distance function which should make it more efficient
-		  than prior versions for larger buffer regions.</para>
-		</note>
-
-		<note><para>Use ST_3DDWithin if you have 3D geometries.</para></note>
 
 		<para>&sfs_compliant;</para>
 		<para>Availability: 1.5.0 support for geography was introduced</para>
 		<para>Enhanced: 2.1.0 improved speed for geography. See <ulink url="http://blog.opengeo.org/2012/07/12/making-geography-faster/">Making Geography faster</ulink> for details.</para>
 		<para>Enhanced: 2.1.0 support for curved geometries was introduced.</para>
+
+        <para>Prior to 1.3, <xref linkend="ST_Expand"/> was commonly used in conjunction with &amp;&amp; and ST_Distance to
+        test for distance, and in pre-1.3.4 this function used that logic.
+        From 1.3.4, ST_DWithin uses a faster short-circuit distance function.</para>
+
 	  </refsection>
 
 	  <refsection>
@@ -2076,7 +2147,7 @@ SELECT b.tower_id, b.geom
 	  <refsection>
 		<title>See Also</title>
 
-		<para><xref linkend="ST_Distance"/>, <xref linkend="ST_Expand"/>, <xref linkend="ST_3DDWithin"/></para>
+		<para><xref linkend="ST_Distance"/>, <xref linkend="ST_3DDWithin"/></para>
 	  </refsection>
 	</refentry>
 
@@ -2084,7 +2155,7 @@ SELECT b.tower_id, b.geom
 	  <refnamediv>
 		<refname>ST_PointInsideCircle</refname>
 
-		<refpurpose>Is the point geometry inside the circle defined by center_x, center_y, radius</refpurpose>
+		<refpurpose>Tests if a point geometry is inside a circle defined by a center and radius.</refpurpose>
 	  </refnamediv>
 
 	  <refsynopsisdiv>
@@ -2102,15 +2173,14 @@ SELECT b.tower_id, b.geom
 	  <refsection>
 		<title>Description</title>
 
-		<para>The syntax for this functions is
-			ST_PointInsideCircle(&lt;geometry&gt;,&lt;circle_center_x&gt;,&lt;circle_center_y&gt;,&lt;radius&gt;).
-			Returns the true if the geometry is a point and is inside the
-			circle. Returns false otherwise.</para>
-		<warning><para>Will not use spatial indexes. Use <xref linkend="ST_DWithin" /> instead.</para></warning>
-		<note><para>This only works for points as the name suggests.</para></note>
+		<para>Returns true if the geometry is a point and is inside the
+			circle with center <varname>center_x</varname>,<varname>center_y</varname>
+            and radius <varname>radius</varname>.
+        </para>
+		<warning><para>Does not use spatial indexes. Use <xref linkend="ST_DWithin" /> instead.</para></warning>
 
 		<para>Availability: 1.2</para>
-		<para>Changed: 2.2.0 In prior versions this used to be called ST_Point_Inside_Circle</para>
+		<para>Changed: 2.2.0 In prior versions this was called ST_Point_Inside_Circle</para>
 	  </refsection>
 
 

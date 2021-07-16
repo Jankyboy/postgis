@@ -211,55 +211,109 @@ projpj_from_string(const char *str1)
 
 #else /* POSTGIS_PROJ_VERION >= 60 */
 
-static uint8_t
-proj_crs_is_swapped(const PJ *pj_crs)
+static PJ *
+proj_cs_get_simplecs(const PJ *pj_crs)
 {
-	PJ *pj_cs;
-	uint8_t rv = LW_FALSE;
-
+	PJ *pj_sub = NULL;
 	if (proj_get_type(pj_crs) == PJ_TYPE_COMPOUND_CRS)
 	{
-		PJ *pj_horiz_crs = proj_crs_get_sub_crs(NULL, pj_crs, 0);
-		if (!pj_horiz_crs)
-			lwerror("%s: proj_crs_get_sub_crs returned NULL", __func__);
-		pj_cs = proj_crs_get_coordinate_system(NULL, pj_horiz_crs);
-		proj_destroy(pj_horiz_crs);
+		/* Sub-CRS[0] is the horizontal component */
+		pj_sub = proj_crs_get_sub_crs(NULL, pj_crs, 0);
+		if (!pj_sub)
+			lwerror("%s: proj_crs_get_sub_crs(0) returned NULL", __func__);
 	}
 	else if (proj_get_type(pj_crs) == PJ_TYPE_BOUND_CRS)
 	{
-		PJ *pj_src_crs = proj_get_source_crs(NULL, pj_crs);
-		if (!pj_src_crs)
+		pj_sub = proj_get_source_crs(NULL, pj_crs);
+		if (!pj_sub)
 			lwerror("%s: proj_get_source_crs returned NULL", __func__);
-		pj_cs = proj_crs_get_coordinate_system(NULL, pj_src_crs);
-		proj_destroy(pj_src_crs);
 	}
 	else
 	{
-		pj_cs = proj_crs_get_coordinate_system(NULL, pj_crs);
+		/* If this works, we have a CS so we can return */
+		pj_sub = proj_crs_get_coordinate_system(NULL, pj_crs);
+		if (pj_sub)
+			return pj_sub;
 	}
-	if (!pj_cs)
-		lwerror("%s: proj_crs_get_coordinate_system returned NULL", __func__);
-	int axis_count = proj_cs_get_axis_count(NULL, pj_cs);
-	if (axis_count > 0)
+
+	/* Only sub-components of the Compound or Bound CRS's get here */
+	/* If we failed to get sub-components, or we failed to extract */
+	/* a CS from a generic CRS, then this is another case we don't */
+	/* handle */
+	if (!pj_sub)
+		lwerror("%s: %s", __func__, proj_errno_string(proj_context_errno(NULL)));
+
+	/* If the components are usable, we can extract the CS and return */
+	int pj_type = proj_get_type(pj_sub);
+	if (pj_type == PJ_TYPE_GEOGRAPHIC_2D_CRS || pj_type == PJ_TYPE_PROJECTED_CRS)
 	{
-		const char *out_name, *out_abbrev, *out_direction;
-		double out_unit_conv_factor;
-		const char *out_unit_name, *out_unit_auth_name, *out_unit_code;
-		/* Read only first axis, see if it is degrees / north */
-		proj_cs_get_axis_info(NULL,
-				      pj_cs,
-				      0,
-				      &out_name,
-				      &out_abbrev,
-				      &out_direction,
-				      &out_unit_conv_factor,
-				      &out_unit_name,
-				      &out_unit_auth_name,
-				      &out_unit_code);
-		rv = (strcasecmp(out_direction, "north") == 0);
+		PJ *pj_2d = proj_crs_get_coordinate_system(NULL, pj_sub);
+		proj_destroy(pj_sub);
+		return pj_2d;
 	}
+
+	/* If the components are *themselves* Bound/Compound, we can recurse */
+	if (pj_type == PJ_TYPE_COMPOUND_CRS || pj_type == PJ_TYPE_BOUND_CRS)
+		return proj_cs_get_simplecs(pj_sub);
+
+	/* This is a case we don't know how to handle */
+	lwerror("%s: un-handled CRS sub-type: %s", __func__, pj_type);
+	return NULL;
+}
+
+static uint8_t
+proj_crs_is_swapped(const PJ *pj_crs)
+{
+	int axis_count;
+	PJ *pj_cs = proj_cs_get_simplecs(pj_crs);
+	if (!pj_cs)
+		lwerror("%s: proj_cs_get_simplecs returned NULL", __func__);
+
+	axis_count = proj_cs_get_axis_count(NULL, pj_cs);
+	if (axis_count >= 2)
+	{
+		const char *out_name1, *out_abbrev1, *out_direction1;
+		const char *out_name2, *out_abbrev2, *out_direction2;
+		/* Read first axis */
+		proj_cs_get_axis_info(NULL,
+			pj_cs, 0,
+			&out_name1, &out_abbrev1, &out_direction1,
+			NULL, NULL, NULL, NULL);
+		/* Read second axis */
+		proj_cs_get_axis_info(NULL,
+			pj_cs, 1,
+			&out_name2, &out_abbrev2, &out_direction2,
+			NULL, NULL, NULL, NULL);
+
+		proj_destroy(pj_cs);
+
+		/* Directions agree, this is a northing/easting CRS, so reverse it */
+		if(out_direction1 && STR_IEQUALS(out_direction1, "north") &&
+		   out_direction2 && STR_IEQUALS(out_direction2, "east") )
+		{
+			return LW_TRUE;
+		}
+
+		/* Oddball case? Both axes north / both axes south, swap */
+		if(out_direction1 && out_direction2 &&
+		   ((STR_IEQUALS(out_direction1, "north") && STR_IEQUALS(out_direction2, "north")) ||
+		    (STR_IEQUALS(out_direction1, "south") && STR_IEQUALS(out_direction2, "south"))) &&
+		   out_name1 && STR_ISTARTS(out_name1, "northing")  &&
+		   out_name2 && STR_ISTARTS(out_name2, "easting"))
+		{
+			return LW_TRUE;
+		}
+
+		/* Any lat/lon system with Lat in first axis gets swapped */
+		if (STR_ISTARTS(out_abbrev1, "Lat"))
+			return LW_TRUE;
+
+		return LW_FALSE;
+	}
+
+	/* Failed the axis count test, leave quietly */
 	proj_destroy(pj_cs);
-	return rv;
+	return LW_FALSE;
 }
 
 LWPROJ *
@@ -462,7 +516,7 @@ ptarray_transform(POINTARRAY *pa, LWPROJ *pj)
 		c.xyzt = v;
 		PJ_COORD t = proj_trans(pj->pj, PJ_FWD, c);
 
-		int pj_errno_val = proj_errno(pj->pj);
+		int pj_errno_val = proj_errno_reset(pj->pj);
 		if (pj_errno_val)
 		{
 			lwerror("transform: %s (%d)", proj_errno_string(pj_errno_val), pj_errno_val);
@@ -505,7 +559,7 @@ ptarray_transform(POINTARRAY *pa, LWPROJ *pj)
 			return LW_FAILURE;
 		}
 
-		int pj_errno_val = proj_errno(pj->pj);
+		int pj_errno_val = proj_errno_reset(pj->pj);
 		if (pj_errno_val)
 		{
 			lwerror("transform: %s (%d)", proj_errno_string(pj_errno_val), pj_errno_val);

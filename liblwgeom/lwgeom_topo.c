@@ -18,7 +18,7 @@
  *
  **********************************************************************
  *
- * Copyright (C) 2015-2017 Sandro Santilli <strk@kbt.io>
+ * Copyright (C) 2015-2021 Sandro Santilli <strk@kbt.io>
  *
  **********************************************************************/
 
@@ -347,10 +347,22 @@ lwt_be_checkTopoGeomRemEdge(LWT_TOPOLOGY* topo, LWT_ELEMID edge_id,
 }
 
 static int
+lwt_be_checkTopoGeomRemIsoEdge(LWT_TOPOLOGY* topo, LWT_ELEMID edge_id)
+{
+  CBT1(topo, checkTopoGeomRemIsoEdge, edge_id);
+}
+
+static int
 lwt_be_checkTopoGeomRemNode(LWT_TOPOLOGY* topo, LWT_ELEMID node_id,
                             LWT_ELEMID eid1, LWT_ELEMID eid2)
 {
   CBT3(topo, checkTopoGeomRemNode, node_id, eid1, eid2);
+}
+
+static int
+lwt_be_checkTopoGeomRemIsoNode(LWT_TOPOLOGY* topo, LWT_ELEMID node_id)
+{
+  CBT1(topo, checkTopoGeomRemIsoNode, node_id);
 }
 
 static int
@@ -543,7 +555,7 @@ _lwt_AddIsoNode( LWT_TOPOLOGY* topo, LWT_ELEMID face,
   if ( checkFace && ( face == -1 || ! skipISOChecks ) )
   {
     foundInFace = lwt_be_getFaceContainingPoint(topo, pt); /*x*/
-    if ( foundInFace == -2 ) {
+    if ( foundInFace == -1 ) {
       lwerror("Backend error: %s", lwt_be_lastErrorMessage(topo->be_iface));
       return -1;
     }
@@ -2367,7 +2379,7 @@ _lwt_AddEdge( LWT_TOPOLOGY* topo,
   for ( i=0; i<num_nodes; ++i )
   {
     LWT_ISO_NODE* node = &(endpoints[i]);
-    if ( node->containing_face != -1 )
+    if ( modFace != -1 && node->containing_face != -1 )
     {
       if ( newedge.face_left == -1 )
       {
@@ -2465,11 +2477,14 @@ _lwt_AddEdge( LWT_TOPOLOGY* topo,
     LWDEBUGF(1, "New edge %d is connected on start node, "
                 "next_right is %d, prev_left is %d",
                 newedge.edge_id, newedge.next_right, prev_left);
-    if ( newedge.face_right == -1 ) {
-      newedge.face_right = span.cwFace;
-    }
-    if ( newedge.face_left == -1 ) {
-      newedge.face_left = span.ccwFace;
+    if ( modFace != -1 )
+    {
+      if ( newedge.face_right == -1 ) {
+        newedge.face_right = span.cwFace;
+      }
+      if ( newedge.face_left == -1 ) {
+        newedge.face_left = span.ccwFace;
+      }
     }
   } else {
     span.was_isolated = 1;
@@ -2489,29 +2504,32 @@ _lwt_AddEdge( LWT_TOPOLOGY* topo,
     LWDEBUGF(1, "New edge %d is connected on end node, "
                 "next_left is %d, prev_right is %d",
                 newedge.edge_id, newedge.next_left, prev_right);
-    if ( newedge.face_right == -1 ) {
-      newedge.face_right = span.ccwFace;
-    } else if ( modFace != -1 && newedge.face_right != epan.ccwFace ) {
-      /* side-location conflict */
-      lwerror("Side-location conflict: "
-              "new edge starts in face"
-               " %" LWTFMT_ELEMID " and ends in face"
-               " %" LWTFMT_ELEMID,
-              newedge.face_right, epan.ccwFace
-      );
-      return -1;
-    }
-    if ( newedge.face_left == -1 ) {
-      newedge.face_left = span.cwFace;
-    } else if ( modFace != -1 && newedge.face_left != epan.cwFace ) {
-      /* side-location conflict */
-      lwerror("Side-location conflict: "
-              "new edge starts in face"
-               " %" LWTFMT_ELEMID " and ends in face"
-               " %" LWTFMT_ELEMID,
-              newedge.face_left, epan.cwFace
-      );
-      return -1;
+    if ( modFace != -1 )
+    {
+      if ( newedge.face_right == -1 ) {
+        newedge.face_right = span.ccwFace;
+      } else if ( newedge.face_right != epan.ccwFace ) {
+        /* side-location conflict */
+        lwerror("Side-location conflict: "
+                "new edge starts in face"
+                 " %" LWTFMT_ELEMID " and ends in face"
+                 " %" LWTFMT_ELEMID,
+                newedge.face_right, epan.ccwFace
+        );
+        return -1;
+      }
+      if ( newedge.face_left == -1 ) {
+        newedge.face_left = span.cwFace;
+      } else if ( newedge.face_left != epan.cwFace ) {
+        /* side-location conflict */
+        lwerror("Side-location conflict: "
+                "new edge starts in face"
+                 " %" LWTFMT_ELEMID " and ends in face"
+                 " %" LWTFMT_ELEMID,
+                newedge.face_left, epan.cwFace
+        );
+        return -1;
+      }
     }
   } else {
     epan.was_isolated = 1;
@@ -2527,18 +2545,21 @@ _lwt_AddEdge( LWT_TOPOLOGY* topo,
    * a malformed topology (no containing_face on isolated nodes, no
    * left/right faces on adjacent edges or mismatching values)
    */
-  if ( newedge.face_left != newedge.face_right )
+  if ( modFace > -1 )
   {
-    lwerror("Left(%" LWTFMT_ELEMID ")/right(%" LWTFMT_ELEMID ")"
-            "faces mismatch: invalid topology ?",
-            newedge.face_left, newedge.face_right);
-    return -1;
-  }
-  else if ( newedge.face_left == -1 && modFace > -1 )
-  {
-    lwerror("Could not derive edge face from linked primitives:"
-            " invalid topology ?");
-    return -1;
+    if ( newedge.face_left != newedge.face_right )
+    {
+      lwerror("Left(%" LWTFMT_ELEMID ")/right(%" LWTFMT_ELEMID ")"
+              " faces mismatch: invalid topology ?",
+              newedge.face_left, newedge.face_right);
+      return -1;
+    }
+    else if ( newedge.face_left == -1 )
+    {
+      lwerror("Could not derive edge face from linked primitives:"
+              " invalid topology ?");
+      return -1;
+    }
   }
 
   /*
@@ -3590,6 +3611,7 @@ lwt_MoveIsoNode(LWT_TOPOLOGY* topo, LWT_ELEMID nid, LWPOINT *pt)
 {
   LWT_ISO_NODE *node;
   int ret;
+  int newPointFace;
 
   node = _lwt_GetIsoNode( topo, nid );
   if ( ! node ) return -1;
@@ -3608,9 +3630,19 @@ lwt_MoveIsoNode(LWT_TOPOLOGY* topo, LWT_ELEMID nid, LWPOINT *pt)
     return -1;
   }
 
-  /* TODO: check that the new point is in the same containing face !
-   * See https://trac.osgeo.org/postgis/ticket/3232
-   */
+  /* Check that the new point is in the same containing face !
+   * See https://trac.osgeo.org/postgis/ticket/3232 */
+  newPointFace = lwt_be_getFaceContainingPoint(topo, pt);
+  if ( newPointFace == -1 ) {
+    lwerror("Backend error: %s", lwt_be_lastErrorMessage(topo->be_iface));
+    return -1;
+  }
+  if ( node->containing_face != newPointFace )
+  {
+    lwfree(node);
+    lwerror("Cannot move isolated node across faces");
+    return -1;
+  }
 
   node->node_id = nid;
   node->geom = pt;
@@ -3649,9 +3681,12 @@ lwt_RemoveIsoNode(LWT_TOPOLOGY* topo, LWT_ELEMID nid)
     return -1;
   }
 
-  /* TODO: notify to caller about node being removed ?
-   * See https://trac.osgeo.org/postgis/ticket/3231
-   */
+  if ( ! lwt_be_checkTopoGeomRemIsoNode(topo, nid) )
+  {
+    lwfree(node);
+    lwerror("%s", lwt_be_lastErrorMessage(topo->be_iface));
+    return -1;
+  }
 
   lwfree(node);
   return 0; /* success */
@@ -3749,9 +3784,14 @@ lwt_RemIsoEdge(LWT_TOPOLOGY* topo, LWT_ELEMID id)
     return -1;
   }
 
-  /* TODO: notify to caller about edge being removed ?
+  /* Check that the edge can be safely removed
    * See https://trac.osgeo.org/postgis/ticket/3248
    */
+  if ( ! lwt_be_checkTopoGeomRemIsoEdge(topo, id) )
+  {
+    lwerror("%s", lwt_be_lastErrorMessage(topo->be_iface));
+    return -1;
+  }
 
   return 0; /* success */
 }
@@ -4499,6 +4539,7 @@ _lwt_HealEdges( LWT_TOPOLOGY* topo, LWT_ELEMID eid1, LWT_ELEMID eid2,
       e2sign = 0;
       _lwt_release_edges(edges, nedges);
       lwerror("Coding error: caseno=%d should never happen", caseno);
+      return -1;
       break;
   }
   newedge.geom = lwline_construct(topo->srid, NULL, pa);
@@ -4774,7 +4815,7 @@ lwt_GetFaceByPoint(LWT_TOPOLOGY *topo, LWPOINT *pt, double tol)
   LWGEOM *qp = lwpoint_as_lwgeom(pt);
 
   id = lwt_be_getFaceContainingPoint(topo, pt);
-  if ( id == -2 ) {
+  if ( id == -1 ) {
     lwerror("Backend error: %s", lwt_be_lastErrorMessage(topo->be_iface));
     return -1;
   }
@@ -4783,7 +4824,11 @@ lwt_GetFaceByPoint(LWT_TOPOLOGY *topo, LWPOINT *pt, double tol)
   {
     return id;
   }
-  id = 0; /* or it'll be -1 for not found */
+
+  if ( tol == 0 )
+  {
+    return id;
+  }
 
   LWDEBUG(1, "No face properly contains query point,"
              " looking for edges");
@@ -5252,9 +5297,13 @@ lwt_AddPoint(LWT_TOPOLOGY* topo, LWPOINT* point, double tol)
 
 /* Return identifier of an equal edge, 0 if none or -1 on error
  * (and lwerror gets called on error)
+ *
+ * If an equal edge is found, specify, in "forward" variable whether
+ * the edge is also equal direction-wise
+ *
  */
 static LWT_ELEMID
-_lwt_GetEqualEdge( LWT_TOPOLOGY *topo, LWLINE *edge )
+_lwt_GetEqualEdge( LWT_TOPOLOGY *topo, LWLINE *edge, int *forward )
 {
   LWT_ELEMID id;
   LWT_ISO_EDGE *edges;
@@ -5306,6 +5355,40 @@ _lwt_GetEqualEdge( LWT_TOPOLOGY *topo, LWLINE *edge )
       if ( equals )
       {
         id = e->edge_id;
+        /* Check if direction also matches */
+        if ( forward )
+        {
+          /* If input line is closed, we use winding order */
+          if ( lwline_is_closed(edge) )
+          {
+            if ( ptarray_isccw(edge->points) == ptarray_isccw(e->geom->points) )
+            {
+              *forward = 1;
+            }
+            else
+            {
+              *forward = 0;
+            }
+          }
+          else
+          {
+            /* Input line is not closed, checking fist point is enough */
+            if (
+              memcmp(
+                  getPoint_internal(edge->points, 0),
+                  getPoint_internal(e->geom->points, 0),
+                  sizeof(POINT2D)
+              ) == 0
+            )
+            {
+              *forward = 1;
+            }
+            else
+            {
+              *forward = 0;
+            }
+          }
+        }
         GEOSGeom_destroy(edgeg);
         _lwt_release_edges(edges, num);
         return id;
@@ -5326,10 +5409,16 @@ _lwt_GetEqualEdge( LWT_TOPOLOGY *topo, LWLINE *edge )
  *        if the newly added edge would split a face and if so
  *        would create new faces accordingly. Otherwise it will
  *        set left_face and right_face to null (-1)
+ *
+ * @param forward output parameter, will be populated if
+ *        a pre-existing edge was found in the topology,
+ *        in which case a value of 1 means the incoming
+ *        line will have the same direction of the edge,
+ *        and 0 that the incomine line has opposite direction
  */
 static LWT_ELEMID
 _lwt_AddLineEdge( LWT_TOPOLOGY* topo, LWLINE* edge, double tol,
-                  int handleFaceSplit )
+                  int handleFaceSplit, int *forward )
 {
   LWCOLLECTION *col;
   LWPOINT *start_point, *end_point;
@@ -5418,22 +5507,22 @@ _lwt_AddLineEdge( LWT_TOPOLOGY* topo, LWLINE* edge, double tol,
     if ( col )
     {{
 
-      col = lwcollection_extract(col, LINETYPE);
+      LWCOLLECTION *colex = lwcollection_extract(col, LINETYPE);
 
       /* Check if the so-snapped edge collapsed (see #1650) */
-      if ( col->ngeoms == 0 )
+      if ( colex->ngeoms == 0 )
       {
-        lwcollection_free(col);
+        lwcollection_free(colex);
         lwgeom_free(tmp);
         LWDEBUG(1, "Made-valid snapped edge collapsed");
         return 0;
       }
 
-      tmp2 = lwgeom_clone_deep( col->geoms[0] );
+      tmp2 = lwgeom_clone_deep(colex->geoms[0]);
       lwgeom_free(tmp);
       tmp = tmp2;
       edge = lwgeom_as_lwline(tmp);
-      lwcollection_free(col);
+      lwcollection_free(colex);
       if ( ! edge )
       {
         /* should never happen */
@@ -5455,7 +5544,7 @@ _lwt_AddLineEdge( LWT_TOPOLOGY* topo, LWLINE* edge, double tol,
   }
 
   /* check if the so-snapped edge _now_ exists */
-  id = _lwt_GetEqualEdge ( topo, edge );
+  id = _lwt_GetEqualEdge ( topo, edge, forward );
   LWDEBUGF(1, "_lwt_GetEqualEdge returned %" LWTFMT_ELEMID, id);
   if ( id == -1 )
   {
@@ -5480,8 +5569,16 @@ _lwt_AddLineEdge( LWT_TOPOLOGY* topo, LWLINE* edge, double tol,
     if ( tmp ) lwgeom_free(tmp);
     tmp = tmp2;
 
+    /* check if the so-decimated edge collapsed to single-point */
+    if ( nid[0] == nid[1] && edge->points->npoints == 2 )
+    {
+      lwgeom_free(tmp);
+      LWDEBUG(1, "Repeated-point removed edge collapsed");
+      return 0;
+    }
+
     /* check if the so-decimated edge _now_ exists */
-    id = _lwt_GetEqualEdge ( topo, edge );
+    id = _lwt_GetEqualEdge ( topo, edge, forward );
     LWDEBUGF(1, "_lwt_GetEqualEdge returned %" LWTFMT_ELEMID, id);
     if ( id == -1 )
     {
@@ -5506,6 +5603,7 @@ _lwt_AddLineEdge( LWT_TOPOLOGY* topo, LWLINE* edge, double tol,
   }
   lwgeom_free(tmp); /* possibly takes "edge" down with it */
 
+  *forward = 1;
   return id;
 }
 
@@ -5548,6 +5646,16 @@ _lwt_AddLine(LWT_TOPOLOGY* topo, LWLINE* line, double tol, int* nedges,
   uint64_t num, numedges = 0, numnodes = 0;
   uint64_t i;
   GBOX qbox;
+  int forward;
+  int input_was_closed = 0;
+  POINT4D originalStartPoint;
+
+  if ( lwline_is_closed(line) )
+  {
+    input_was_closed = 1;
+    getPoint4d_p( line->points, 0, &originalStartPoint);
+    LWDEBUGF(1, "Input line is closed, original point is %g,%g", originalStartPoint.x, originalStartPoint.y);
+  }
 
   *nedges = -1; /* error condition, by default */
 
@@ -5578,10 +5686,10 @@ _lwt_AddLine(LWT_TOPOLOGY* topo, LWLINE* line, double tol, int* nedges,
               tol, qbox.xmin, qbox.ymin, qbox.xmax, qbox.ymax);
 
   LWGEOM **nearby = 0;
-  int nearbyindex=0;
+  int nearbyindex = 0;
   int nearbycount = 0;
 
-  /* 2. Node to edges falling within tol distance */
+  /* 2.0. Find edges falling within tol distance */
   edges = lwt_be_getEdgeWithinBox2D( topo, &qbox, &numedges, LWT_COL_EDGE_ALL, 0 );
   if (numedges == UINT64_MAX)
   {
@@ -5595,7 +5703,7 @@ _lwt_AddLine(LWT_TOPOLOGY* topo, LWLINE* line, double tol, int* nedges,
   {{
     /* collect those whose distance from us is < tol */
     nearbycount += numedges;
-    nearby = lwalloc(nearbycount * sizeof(LWGEOM *));
+    nearby = lwalloc(numedges * sizeof(LWGEOM *));
     for (i=0; i<numedges; ++i)
     {
       LW_ON_INTERRUPT(return NULL);
@@ -5607,57 +5715,14 @@ _lwt_AddLine(LWT_TOPOLOGY* topo, LWLINE* line, double tol, int* nedges,
       if ( dist && dist >= tol ) continue;
       nearby[nearbyindex++] = g;
     }
-    LWDEBUGF(2, "Found %d lines closer than tolerance (%g)", nearbyindex, tol);
-    if ( nearbyindex )
-    {{
-      LWCOLLECTION *col;
-      LWGEOM *iedges; /* just an alias for col */
-      LWGEOM *snapped;
-      LWGEOM *set1, *set2;
-
-      LWDEBUGF(1, "Line intersects %d edges", nearbyindex);
-
-      col = lwcollection_construct(COLLECTIONTYPE, topo->srid,
-                                   NULL, nearbyindex, nearby);
-      iedges = lwcollection_as_lwgeom(col);
-      LWDEBUGG(1, iedges, "Collected edges");
-      LWDEBUGF(1, "Snapping noded, with srid=%d "
-                  "to interesecting edges, with srid=%d",
-                  noded->srid, iedges->srid);
-      snapped = _lwt_toposnap(noded, iedges, tol);
-      lwgeom_free(noded);
-      LWDEBUGG(1, snapped, "Snapped");
-      LWDEBUGF(1, "Diffing snapped, with srid=%d "
-                  "and interesecting edges, with srid=%d",
-                  snapped->srid, iedges->srid);
-      noded = lwgeom_difference(snapped, iedges);
-      LWDEBUGG(1, noded, "Differenced");
-      LWDEBUGF(1, "Intersecting snapped, with srid=%d "
-                  "and interesecting edges, with srid=%d",
-                  snapped->srid, iedges->srid);
-      set1 = lwgeom_intersection(snapped, iedges);
-      LWDEBUGG(1, set1, "Intersected");
-      lwgeom_free(snapped);
-      LWDEBUGF(1, "Linemerging set1, with srid=%d", set1->srid);
-      set2 = lwgeom_linemerge(set1);
-      LWDEBUGG(1, set2, "Linemerged");
-      LWDEBUGG(1, noded, "Noded");
-      lwgeom_free(set1);
-      LWDEBUGF(1, "Unioning noded, with srid=%d "
-                  "and set2, with srid=%d", noded->srid, set2->srid);
-      set1 = lwgeom_union(noded, set2);
-      lwgeom_free(set2);
-      lwgeom_free(noded);
-      noded = set1;
-      LWDEBUGG(1, set1, "Unioned");
-
-      /* will not release the geoms array */
-      lwcollection_release(col);
-    }}
+    LWDEBUGF(1, "Found %d edges closer than tolerance (%g)", nearbyindex, tol);
   }}
+  int nearbyedgecount = nearbyindex;
 
-  /* 2.1. Node with existing nodes within tol
-   * TODO: check if we should be only considering _isolated_ nodes! */
+  /* 2.1. Find isolated nodes falling within tol distance
+   *
+   * TODO: add backend-interface support for only getting isolated nodes
+   */
   nodes = lwt_be_getNodeWithinBox2D( topo, &qbox, &numnodes, LWT_COL_NODE_ALL, 0 );
   if (numnodes == UINT64_MAX)
   {
@@ -5666,11 +5731,10 @@ _lwt_AddLine(LWT_TOPOLOGY* topo, LWLINE* line, double tol, int* nedges,
     return NULL;
   }
   LWDEBUGF(1, "Line bbox intersects %d nodes bboxes", numnodes);
-  int nearbyedgecount = nearbyindex;
   if ( numnodes )
   {{
     /* collect those whose distance from us is < tol */
-    nearbycount = nearbyindex + numnodes;
+    nearbycount = nearbyedgecount + numnodes;
     nearby = nearby ?
         lwrealloc(nearby, nearbycount * sizeof(LWGEOM *))
         :
@@ -5680,24 +5744,33 @@ _lwt_AddLine(LWT_TOPOLOGY* topo, LWLINE* line, double tol, int* nedges,
     for (i=0; i<numnodes; ++i)
     {
       LWT_ISO_NODE *n = &(nodes[i]);
+      if ( n->containing_face == -1 ) continue; /* skip not-isolated nodes */
       LWGEOM *g = lwpoint_as_lwgeom(n->geom);
       double dist = lwgeom_mindistance2d(g, noded);
       /* must be closer than tolerated, unless distance is zero */
-      if ( dist && dist >= tol ) continue;
+      if ( dist && dist >= tol )
+      {
+        LWDEBUGF(1, "Node %d is %g units away, we tolerate only %g", n->node_id, dist, tol);
+        continue;
+      }
       nearby[nearbyindex++] = g;
       ++nn;
     }
+    LWDEBUGF(1, "Found %d isolated nodes closer than tolerance (%g)", nn, tol);
   }}
+  int nearbynodecount = nearbyindex - nearbyedgecount;
+  nearbycount = nearbyindex;
 
-  LWDEBUGF(1, "Number of nearby elements is %d", nearbyindex);
+  LWDEBUGF(1, "Number of nearby elements is %d", nearbycount);
 
-  if ( numnodes )
+  /* 2.2. Snap to nearby elements */
+  if ( nearbycount )
   {{
     LWCOLLECTION *col;
     LWGEOM *elems;
 
     col = lwcollection_construct(COLLECTIONTYPE, topo->srid,
-                                 NULL, nearbyindex, nearby);
+                                 NULL, nearbycount, nearby);
     elems = lwcollection_as_lwgeom(col);
 
     LWDEBUGG(1, elems, "Collected nearby elements");
@@ -5706,23 +5779,19 @@ _lwt_AddLine(LWT_TOPOLOGY* topo, LWLINE* line, double tol, int* nedges,
     lwgeom_free(noded);
     noded = tmp;
     LWDEBUGG(1, noded, "Elements-snapped");
+    if ( input_was_closed )
+    {{
+      /* Recompute start point in case it moved */
+      LWLINE *scrolled = lwgeom_as_lwline(noded);
+      if (scrolled)
+      {
+        getPoint4d_p( scrolled->points, 0, &originalStartPoint);
+        LWDEBUGF(1, "Closed input line start point after snap %g,%g", originalStartPoint.x, originalStartPoint.y);
+      }
+    }}
 
     /* will not release the geoms array */
     lwcollection_release(col);
-
-    if ( numnodes )
-    {{
-      col = lwcollection_construct(MULTIPOINTTYPE, topo->srid,
-                             NULL, nearbyindex-nearbyedgecount,
-                             nearby + nearbyedgecount);
-      LWGEOM *inodes = lwcollection_as_lwgeom(col);
-      tmp = _lwt_split_by_nodes(noded, inodes);
-      lwgeom_free(noded);
-      noded = tmp;
-      LWDEBUGG(1, noded, "Node-split");
-      /* will not release the geoms array */
-      lwcollection_release(col);
-    }}
 
     /*
     -- re-node to account for ST_Snap introduced self-intersections
@@ -5733,11 +5802,127 @@ _lwt_AddLine(LWT_TOPOLOGY* topo, LWLINE* line, double tol, int* nedges,
     lwgeom_free(noded);
     noded = tmp;
     LWDEBUGG(1, noded, "Unary-unioned");
-
   }}
+
+  /* 2.3. Node with nearby edges */
+  if ( nearbyedgecount )
+  {{
+    LWCOLLECTION *col;
+    LWGEOM *iedges; /* just an alias for col */
+    LWGEOM *diff, *xset;
+
+    LWDEBUGF(1, "Line intersects %d edges", nearbyedgecount);
+
+    col = lwcollection_construct(COLLECTIONTYPE, topo->srid,
+                                 NULL, nearbyedgecount, nearby);
+    iedges = lwcollection_as_lwgeom(col);
+    LWDEBUGG(1, iedges, "Collected edges");
+
+    LWDEBUGF(1, "Diffing noded, with srid=%d "
+                "and interesecting edges, with srid=%d",
+                noded->srid, iedges->srid);
+    diff = lwgeom_difference(noded, iedges);
+    LWDEBUGG(1, diff, "Differenced");
+
+    LWDEBUGF(1, "Intersecting noded, with srid=%d "
+                "and interesecting edges, with srid=%d",
+                noded->srid, iedges->srid);
+    xset = lwgeom_intersection(noded, iedges);
+    LWDEBUGG(1, xset, "Intersected");
+    lwgeom_free(noded);
+
+    /* We linemerge here because INTERSECTION, as of GEOS 3.8,
+     * will result in shared segments being output as multiple
+     * lines rather than a single line. Example:
+
+          INTERSECTION(
+            'LINESTRING(0 0, 5 0, 8 0, 10 0,12 0)',
+            'LINESTRING(5 0, 8 0, 10 0)'
+          )
+          ==
+          MULTILINESTRING((5 0,8 0),(8 0,10 0))
+
+     * We will re-split in a subsequent step, by splitting
+     * the final line with pre-existing nodes
+     */
+    LWDEBUG(1, "Linemerging intersection");
+    tmp = lwgeom_linemerge(xset);
+    LWDEBUGG(1, tmp, "Linemerged");
+    lwgeom_free(xset);
+    xset = tmp;
+
+    if ( input_was_closed )
+    {{
+      LWLINE *scrolled = lwgeom_as_lwline(xset);
+      if (scrolled) {
+        if ( lwline_is_closed(scrolled) ) {
+          ptarray_scroll_in_place(scrolled->points, &originalStartPoint);
+        }
+        else {
+          LWDEBUGG(1, lwline_as_lwgeom(scrolled), "Linemerged intersected input is not closed anymore");
+        }
+      }
+      else {
+        LWDEBUGG(1, xset, "Linemerged intersected input is not a line anymore");
+      }
+    }}
+
+
+    /*
+     * Here we union the (linemerged) intersection with
+     * the difference (new lines)
+     */
+    LWDEBUG(1, "Unioning difference and (linemerged) intersection");
+    noded = lwgeom_union(diff, xset);
+    LWDEBUGG(1, noded, "Diff-Xset Unioned");
+    lwgeom_free(xset);
+    lwgeom_free(diff);
+
+    /* will not release the geoms array */
+    lwcollection_release(col);
+  }}
+
+
+  /* 2.4. Split by pre-existing nodes
+   *
+   * Pre-existing nodes are isolated nodes AND endpoints
+   * of intersecting edges
+   */
+  if ( nearbyedgecount )
+  {
+    nearbycount += nearbyedgecount * 2; /* make space for endpoints */
+    nearby = lwrealloc(nearby, nearbycount * sizeof(LWGEOM *));
+    for (int i=0; i<nearbyedgecount; i++)
+    {
+      LWLINE *edge = lwgeom_as_lwline(nearby[i]);
+      LWPOINT *startNode = lwline_get_lwpoint(edge, 0);
+      LWPOINT *endNode = lwline_get_lwpoint(edge, edge->points->npoints-1);
+      /* TODO: only add if within distance to noded AND if not duplicated */
+      nearby[nearbyindex++] = lwpoint_as_lwgeom(startNode);
+      nearbynodecount++;
+      nearby[nearbyindex++] = lwpoint_as_lwgeom(endNode);
+      nearbynodecount++;
+    }
+  }
+  if ( nearbynodecount )
+  {
+    col = lwcollection_construct(MULTIPOINTTYPE, topo->srid,
+                             NULL, nearbynodecount,
+                             nearby + nearbyedgecount);
+    LWGEOM *inodes = lwcollection_as_lwgeom(col);
+    /* TODO: use lwgeom_split of lwgeom_union ... */
+    tmp = _lwt_split_by_nodes(noded, inodes);
+    lwgeom_free(noded);
+    noded = tmp;
+    LWDEBUGG(1, noded, "Node-split");
+    /* will not release the geoms array */
+    lwcollection_release(col);
+  }
+
 
   LWDEBUG(1, "Freeing up nearby elements");
 
+  /* TODO: free up endpoints of nearbyedges */
   if ( nearby ) lwfree(nearby);
   if ( nodes ) _lwt_release_nodes(nodes, numnodes);
   if ( edges ) _lwt_release_edges(edges, numedges);
@@ -5783,7 +5968,7 @@ _lwt_AddLine(LWT_TOPOLOGY* topo, LWLINE* line, double tol, int* nedges,
     }
 #endif
 
-    id = _lwt_AddLineEdge( topo, lwgeom_as_lwline(g), tol, handleFaceSplit );
+    id = _lwt_AddLineEdge( topo, lwgeom_as_lwline(g), tol, handleFaceSplit, &forward );
     LWDEBUGF(1, "_lwt_AddLineEdge returned %" LWTFMT_ELEMID, id);
     if ( id < 0 )
     {
@@ -5797,9 +5982,9 @@ _lwt_AddLine(LWT_TOPOLOGY* topo, LWLINE* line, double tol, int* nedges,
       continue;
     }
 
-    LWDEBUGF(1, "Component %d of split line is edge %" LWTFMT_ELEMID,
-                  i, id);
-    ids[num++] = id; /* TODO: skip duplicates */
+    LWDEBUGF(1, "Component %d of split line is %s edge %" LWTFMT_ELEMID,
+                  i, forward ? "forward" : "backward", id);
+    ids[num++] = forward ? id : -id; /* TODO: skip duplicates */
   }
 
   LWDEBUGG(1, noded, "Noded before free");
@@ -6138,7 +6323,7 @@ _lwt_EdgeRingIterator_begin(LWT_EDGERING *er)
   if ( er->size ) ret->curelem = er->elems[0];
   else ret->curelem = NULL;
   ret->curelemidx = 0;
-  ret->curidx = ret->curelem->left ? 0 : ret->curelem->edge->geom->points->npoints - 1;
+  ret->curidx = (ret->curelem == NULL || ret->curelem->left) ? 0 : ret->curelem->edge->geom->points->npoints - 1;
   return ret;
 }
 

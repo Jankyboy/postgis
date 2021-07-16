@@ -362,9 +362,8 @@ typedef struct LWT_BE_CALLBACKS_T {
    * @param topo the topology to act upon
    * @param pt the query point
    *
-   * @return a face identifier, -1 if no face contains the point
-   *         (could be in universe face or on an edge)
-   *         or -2 on error (@see lastErrorMessage)
+   * @return a face identifier (0 if no face contains the point)
+   *         or -1 on error (@see lastErrorMessage)
    */
   LWT_ELEMID (*getFaceContainingPoint) (
       const LWT_BE_TOPOLOGY* topo,
@@ -756,7 +755,7 @@ typedef struct LWT_BE_CALLBACKS_T {
    *
    * The operation should also be forbidden if the removed node
    * takes part in the definition of a TopoGeometry, although
-   * this wasn't the case yet as of PostGIS version 2.1.8:
+   * this wasn't the case yet as of PostGIS version 3.1:
    * https://trac.osgeo.org/postgis/ticket/3239
    *
    * @return 1 to allow, 0 to forbid the operation
@@ -814,6 +813,38 @@ typedef struct LWT_BE_CALLBACKS_T {
 				      uint64_t *numelems,
 				      int fields,
 				      int limit);
+
+  /**
+   * Check TopoGeometry objects before an isolated node removal event
+   *
+   * @param topo the topology to act upon
+   * @param rem_node identifier of the isolated node that's been removed
+   *
+   * The operation should be forbidden if the removed node
+   * takes part in the definition of a TopoGeometry.
+   *
+   * @return 1 to allow, 0 to forbid the operation
+   *         (reporting reason via lastErrorMessage)
+   *
+   */
+  int (*checkTopoGeomRemIsoNode) (
+      const LWT_BE_TOPOLOGY* topo,
+      LWT_ELEMID rem_node
+  );
+
+  /**
+   * Check TopoGeometry objects before an isolated edge removal event
+   *
+   * @param topo the topology to act upon
+   * @param rem_edge identifier of the edge that's been removed
+   *
+   * @return 1 to allow, 0 to forbid the operation
+   *         (reporting reason via lastErrorMessage)
+   */
+  int (*checkTopoGeomRemIsoEdge) (
+      const LWT_BE_TOPOLOGY* topo,
+      LWT_ELEMID rem_edge
+  );
 
 } LWT_BE_CALLBACKS;
 

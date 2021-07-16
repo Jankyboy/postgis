@@ -360,7 +360,7 @@ static int gbox_check_poles(GBOX *gbox)
 		else if ((gbox->ymin < 0.0) && (gbox->ymax < 0.0))
 		{
 			LWDEBUG(4, "enclosed negative y axis");
-			gbox->ymax = -1.0;
+			gbox->ymin = -1.0;
 		}
 		else
 		{
@@ -2156,7 +2156,7 @@ LWPOINT* lwgeom_project_spheroid(const LWPOINT *r, const SPHEROID *spheroid, dou
 double lwgeom_azumith_spheroid(const LWPOINT *r, const LWPOINT *s, const SPHEROID *spheroid)
 {
 	GEOGRAPHIC_POINT g1, g2;
-	double x1, y1, x2, y2;
+	double x1, y1, x2, y2, az;
 
 	/* Convert r to a geodetic point */
 	x1 = lwpoint_get_x(r);
@@ -2175,7 +2175,10 @@ double lwgeom_azumith_spheroid(const LWPOINT *r, const LWPOINT *s, const SPHEROI
 	}
 
 	/* Do the direction calculation */
-	return spheroid_direction(&g1, &g2, spheroid);
+	az = spheroid_direction(&g1, &g2, spheroid);
+	/* Ensure result is positive */
+	return az < -0 ? 2*M_PI + az : az;
+	// return az;
 }
 
 /**
